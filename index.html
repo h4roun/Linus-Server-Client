@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulateur IPC Unix - Tubes Nommés (FIFO)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+            border-radius: 10px;
+        }
+        
+        .header h1 {
+            color: #4ecca3;
+            font-size: 32px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px rgba(78, 204, 163, 0.5);
+        }
+        
+        .header p {
+            color: #93deff;
+            font-size: 14px;
+        }
+        
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .section {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #0f3460;
+        }
+        
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #0f3460;
+        }
+        
+        .section-title {
+            color: #4ecca3;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-running {
+            background: #4ecca3;
+            color: #16213e;
+        }
+        
+        .status-stopped {
+            background: #e94560;
+            color: white;
+        }
+        
+        .status-waiting {
+            background: #f39c12;
+            color: white;
+        }
+        
+        .server-info {
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .info-label {
+            color: #93deff;
+        }
+        
+        .info-value {
+            color: #4ecca3;
+            font-weight: bold;
+        }
+        
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Consolas', monospace;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        
+        .btn-start {
+            background: #4ecca3;
+            color: #16213e;
+        }
+        
+        .btn-start:hover {
+            background: #45b890;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(78, 204, 163, 0.4);
+        }
+        
+        .btn-stop {
+            background: #e94560;
+            color: white;
+        }
+        
+        .btn-stop:hover {
+            background: #d63447;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(233, 69, 96, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .client-form {
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .form-group {
+            margin-bottom: 12px;
+        }
+        
+        .form-group label {
+            display: block;
+            color: #93deff;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            background: #16213e;
+            border: 2px solid #0f3460;
+            border-radius: 6px;
+            color: #eee;
+            font-family: 'Consolas', monospace;
+            font-size: 14px;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #4ecca3;
+        }
+        
+        .clients-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .client-card {
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #4ecca3;
+            position: relative;
+        }
+        
+        .client-card.inactive {
+            border-left-color: #666;
+            opacity: 0.6;
+        }
+        
+        .client-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .client-id {
+            color: #4ecca3;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .client-status {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: #16213e;
+        }
+        
+        .client-form-inline {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .client-form-inline input {
+            padding: 8px;
+            background: #16213e;
+            border: 2px solid #0f3460;
+            border-radius: 6px;
+            color: #eee;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            width: 100%;
+        }
+        
+        .client-form-inline input:focus {
+            outline: none;
+            border-color: #4ecca3;
+        }
+        
+        .client-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn-small {
+            padding: 8px 15px;
+            font-size: 12px;
+            flex: 1;
+        }
+        
+        .btn-send {
+            background: #4ecca3;
+            color: #16213e;
+        }
+        
+        .btn-send:hover {
+            background: #45b890;
+        }
+        
+        .btn-remove {
+            background: #e94560;
+            color: white;
+            flex: 0 0 auto;
+            padding: 8px 12px;
+        }
+        
+        .btn-remove:hover {
+            background: #d63447;
+        }
+        
+        .fifo-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .fifo-box {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #0f3460;
+        }
+        
+        .fifo-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .fifo-title {
+            color: #4ecca3;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .fifo-subtitle {
+            color: #93deff;
+            font-size: 12px;
+        }
+        
+        .fifo-content {
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 8px;
+            min-height: 150px;
+            color: #93deff;
+            font-size: 13px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .log-container {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #0f3460;
+        }
+        
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .log-content {
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        
+        .log-entry {
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            border-left: 3px solid;
+        }
+        
+        .log-client {
+            border-left-color: #93deff;
+            background: rgba(147, 222, 255, 0.1);
+        }
+        
+        .log-server {
+            border-left-color: #4ecca3;
+            background: rgba(78, 204, 163, 0.1);
+        }
+        
+        .log-signal {
+            border-left-color: #f39c12;
+            background: rgba(243, 156, 18, 0.1);
+        }
+        
+        .log-time {
+            color: #93deff;
+            margin-right: 10px;
+        }
+        
+        .btn-clear {
+            background: #0f3460;
+            color: #93deff;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        
+        .result-display {
+            background: #0f3460;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        
+        .values-display {
+            color: #4ecca3;
+            margin-top: 5px;
+            font-weight: bold;
+        }
+        
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #0f3460;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #4ecca3;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔄 Simulateur IPC Unix - Tubes Nommés (FIFO)</h1>
+        <p>Communication Client-Serveur par tubes nommés avec signaux SIGUSR1</p>
+    </div>
+
+    <div class="main-container">
+        <!-- Section Serveur -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-title">🖥️ Serveur</span>
+                <span class="status-badge" id="serverStatus">● État: En attente</span>
+            </div>
+            
+            <div class="server-info">
+                <div class="info-row">
+                    <span class="info-label">PID:</span>
+                    <span class="info-value" id="serverPid">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">État:</span>
+                    <span class="info-value" id="serverState">Arrêté</span>
+                </div>
+            </div>
+            
+            <button class="btn btn-start" id="startServerBtn" onclick="startServer()">
+                ▶ Démarrer Serveur
+            </button>
+            <button class="btn btn-stop" id="stopServerBtn" onclick="stopServer()" disabled>
+                ⏹ Arrêter Serveur
+            </button>
+            
+            <div style="margin-top: 20px;">
+                <h4 style="color: #93deff; margin-bottom: 10px;">Fonctionnalités:</h4>
+                <ul style="color: #93deff; font-size: 12px; line-height: 1.8; padding-left: 20px;">
+                    <li>Création tubes nommés (mkfifo)</li>
+                    <li>Lecture questions depuis FIFO1</li>
+                    <li>Génération nombres aléatoires (rand)</li>
+                    <li>Envoi réponses dans FIFO2</li>
+                    <li>Gestion signaux SIGUSR1</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Section Clients -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-title">👥 Clients</span>
+                <span class="info-value" id="clientCount">0 clients actifs</span>
+            </div>
+            
+            <button class="btn btn-start" onclick="addClient()" style="margin-bottom: 15px;">
+                ➕ Ajouter un Client
+            </button>
+            
+            <div class="clients-list" id="clientsList">
+                <div style="text-align: center; color: #93deff; padding: 20px; font-size: 14px;">
+                    Aucun client créé.<br>Cliquez sur "Ajouter un Client" pour commencer.
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px;">
+                <h4 style="color: #93deff; margin-bottom: 10px;">Protocole Client:</h4>
+                <ol style="color: #93deff; font-size: 12px; line-height: 1.8; padding-left: 20px;">
+                    <li>Ouverture tubes FIFO1 & FIFO2</li>
+                    <li>Construction et envoi question</li>
+                    <li>Attente signal SIGUSR1 du serveur</li>
+                    <li>Lecture réponse depuis FIFO2</li>
+                    <li>Envoi signal SIGUSR1 → Serveur</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- FIFOs -->
+    <div class="fifo-container">
+        <div class="fifo-box">
+            <div class="fifo-header">
+                <span>📡</span>
+                <div>
+                    <div class="fifo-title">FIFO1</div>
+                    <div class="fifo-subtitle">Questions (Client → Serveur)</div>
+                </div>
+            </div>
+            <div class="fifo-content" id="fifo1Content">
+                Tube vide - En attente de questions...
+            </div>
+            <div style="margin-top: 10px; font-size: 11px; color: #93deff;">
+                mkfifo("fifo1", 0666)
+            </div>
+        </div>
+
+        <div class="fifo-box">
+            <div class="fifo-header">
+                <span>📡</span>
+                <div>
+                    <div class="fifo-title">FIFO2</div>
+                    <div class="fifo-subtitle">Réponses (Serveur → Client)</div>
+                </div>
+            </div>
+            <div class="fifo-content" id="fifo2Content">
+                Tube vide - En attente de réponses...
+            </div>
+            <div style="margin-top: 10px; font-size: 11px; color: #93deff;">
+                mkfifo("fifo2", 0666)
+            </div>
+        </div>
+    </div>
+
+    <!-- Journal de Communication -->
+    <div class="log-container">
+        <div class="log-header">
+            <div>
+                <span class="section-title">📋 Journal de Communication</span>
+                <div style="font-size: 12px; color: #93deff; margin-top: 5px;">
+                    Messages IPC et signaux en temps réel - <span id="logCount">0</span> événements
+                </div>
+            </div>
+            <button class="btn btn-clear" onclick="clearLog()">🗑️ Effacer</button>
+        </div>
+        <div class="log-content" id="logContent">
+            <div style="text-align: center; color: #93deff; padding: 20px;">
+                En attente d'événements...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let serverRunning = false;
+        let serverPid = null;
+        let logCount = 0;
+        let clients = [];
+        let nextClientId = 1;
+
+        function getTimestamp() {
+            const now = new Date();
+            return now.toTimeString().split(' ')[0];
+        }
+
+        function addLog(message, type = 'server') {
+            const logContent = document.getElementById('logContent');
+            if (logCount === 0) {
+                logContent.innerHTML = '';
+            }
+            
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.innerHTML = `<span class="log-time">[${getTimestamp()}]</span>${message}`;
+            logContent.insertBefore(entry, logContent.firstChild);
+            
+            logCount++;
+            document.getElementById('logCount').textContent = logCount;
+            logContent.scrollTop = 0;
+        }
+
+        function updateClientCount() {
+            const count = clients.length;
+            document.getElementById('clientCount').textContent = `${count} client${count !== 1 ? 's' : ''} actif${count !== 1 ? 's' : ''}`;
+        }
+
+        function addClient() {
+            const clientId = nextClientId++;
+            const client = {
+                id: clientId,
+                status: 'idle',
+                numValues: 5
+            };
+            clients.push(client);
+            
+            renderClients();
+            updateClientCount();
+            addLog(`[Client ${clientId}] Client créé et prêt`, 'client');
+        }
+
+        function removeClient(clientId) {
+            clients = clients.filter(c => c.id !== clientId);
+            renderClients();
+            updateClientCount();
+            addLog(`[Client ${clientId}] Client supprimé`, 'client');
+        }
+
+        function renderClients() {
+            const clientsList = document.getElementById('clientsList');
+            
+            if (clients.length === 0) {
+                clientsList.innerHTML = `
+                    <div style="text-align: center; color: #93deff; padding: 20px; font-size: 14px;">
+                        Aucun client créé.<br>Cliquez sur "Ajouter un Client" pour commencer.
+                    </div>
+                `;
+                return;
+            }
+            
+            clientsList.innerHTML = clients.map(client => `
+                <div class="client-card ${client.status === 'idle' ? '' : 'processing'}" id="client-${client.id}">
+                    <div class="client-header">
+                        <span class="client-id">👤 Client ${client.id}</span>
+                        <span class="client-status status-waiting">
+                            ${client.status === 'idle' ? '⏸ En attente' : '⚡ Traitement...'}
+                        </span>
+                    </div>
+                    
+                    <div class="client-form-inline">
+                        <input 
+                            type="number" 
+                            id="numValues-${client.id}" 
+                            min="1" 
+                            max="20" 
+                            value="${client.numValues}"
+                            placeholder="Nb valeurs (1-20)"
+                            ${client.status !== 'idle' ? 'disabled' : ''}
+                        >
+                    </div>
+                    
+                    <div class="client-actions">
+                        <button 
+                            class="btn btn-small btn-send" 
+                            onclick="sendClientRequest(${client.id})"
+                            ${client.status !== 'idle' || !serverRunning ? 'disabled' : ''}
+                        >
+                            📤 Envoyer Question
+                        </button>
+                        <button 
+                            class="btn btn-small btn-remove" 
+                            onclick="removeClient(${client.id})"
+                            ${client.status !== 'idle' ? 'disabled' : ''}
+                        >
+                            🗑️
+                        </button>
+                    </div>
+                    
+                    <div id="result-${client.id}"></div>
+                </div>
+            `).join('');
+        }
+
+        async function startServer() {
+            const response = await fetch('/api/server/start', { method: 'POST' });
+            const data = await response.json();
+            
+            if (data.success) {
+                serverRunning = true;
+                serverPid = data.pid;
+                
+                document.getElementById('serverPid').textContent = data.pid;
+                document.getElementById('serverState').textContent = 'En attente';
+                document.getElementById('serverStatus').textContent = '● État: En attente';
+                document.getElementById('serverStatus').className = 'status-badge status-waiting';
+                
+                document.getElementById('startServerBtn').disabled = true;
+                document.getElementById('stopServerBtn').disabled = false;
+                
+                addLog(`[Serveur] Démarrage du serveur (PID: ${data.pid})`, 'server');
+                addLog(`[Serveur] Création des tubes nommés FIFO1 et FIFO2`, 'server');
+                addLog(`[Serveur] Serveur prêt. En attente de requêtes...`, 'server');
+                
+                document.getElementById('fifo1Content').innerHTML = '<div style="color: #4ecca3;">✓ Tube créé et ouvert en lecture</div>';
+                document.getElementById('fifo2Content').innerHTML = '<div style="color: #4ecca3;">✓ Tube créé et ouvert en écriture</div>';
+                
+                renderClients(); // Re-render pour activer les boutons
+            } else {
+                alert('Erreur: ' + data.error);
+            }
+        }
+
+        async function stopServer() {
+            const response = await fetch('/api/server/stop', { method: 'POST' });
+            const data = await response.json();
+            
+            if (data.success) {
+                serverRunning = false;
+                serverPid = null;
+                
+                document.getElementById('serverPid').textContent = '-';
+                document.getElementById('serverState').textContent = 'Arrêté';
+                document.getElementById('serverStatus').textContent = '● État: Arrêté';
+                document.getElementById('serverStatus').className = 'status-badge status-stopped';
+                
+                document.getElementById('startServerBtn').disabled = false;
+                document.getElementById('stopServerBtn').disabled = true;
+                
+                addLog('[Serveur] Arrêt du serveur...', 'server');
+                addLog('[Serveur] Nettoyage des tubes FIFO1 et FIFO2', 'server');
+                
+                document.getElementById('fifo1Content').textContent = 'Tube vide - En attente de questions...';
+                document.getElementById('fifo2Content').textContent = 'Tube vide - En attente de réponses...';
+                
+                renderClients(); // Re-render pour désactiver les boutons
+            }
+        }
+
+        async function sendClientRequest(clientId) {
+            if (!serverRunning) {
+                alert('⚠️ Veuillez démarrer le serveur d\'abord !');
+                return;
+            }
+            
+            const client = clients.find(c => c.id === clientId);
+            if (!client) return;
+            
+            const numValuesInput = document.getElementById(`numValues-${clientId}`);
+            const numValues = parseInt(numValuesInput.value);
+            
+            if (!numValues || numValues < 1 || numValues > 20) {
+                alert('⚠️ Le nombre de valeurs doit être entre 1 et 20');
+                return;
+            }
+            
+            // Mettre à jour le statut du client
+            client.status = 'processing';
+            client.numValues = numValues;
+            renderClients();
+            
+            document.getElementById('serverStatus').textContent = '● État: Traitement';
+            document.getElementById('serverStatus').className = 'status-badge status-running';
+            document.getElementById('serverState').textContent = 'Traitement';
+            
+            addLog(`[Client ${clientId}] Envoi question dans FIFO1: demande de ${numValues} nombres aléatoires`, 'client');
+            document.getElementById('fifo1Content').innerHTML = `<div style="color: #93deff; text-align: left;">
+                <strong>Question reçue:</strong><br>
+                Client ID: ${clientId}<br>
+                Nombre de valeurs: ${numValues}
+            </div>`;
+            
+            setTimeout(async () => {
+                const response = await fetch('/api/client/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        clientId: clientId, 
+                        numValues: numValues 
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    addLog(`[Serveur] Lecture question de Client ${clientId} depuis FIFO1`, 'server');
+                    addLog(`[Serveur] Génération de ${numValues} nombres aléatoires`, 'server');
+                    
+                    const valuesStr = data.values.join(', ');
+                    addLog(`[Serveur] Valeurs générées: ${valuesStr}`, 'server');
+                    addLog(`[Serveur] Envoi réponse dans FIFO2 pour Client ${clientId}`, 'server');
+                    
+                    document.getElementById('fifo2Content').innerHTML = `<div style="color: #4ecca3; text-align: left;">
+                        <strong>Réponse envoyée:</strong><br>
+                        ${numValues} valeurs: ${valuesStr}<br>
+                        Somme: ${data.sum}<br>
+                        Moyenne: ${data.avg}
+                    </div>`;
+                    
+                    addLog(`[Serveur] Envoi signal SIGUSR1 → Client ${clientId}`, 'signal');
+                    addLog(`[Client ${clientId}] Réveillé par SIGUSR1 du serveur`, 'client');
+                    addLog(`[Client ${clientId}] Lecture réponse depuis FIFO2`, 'client');
+                    addLog(`[Client ${clientId}] Valeurs reçues: ${valuesStr}`, 'client');
+                    addLog(`[Client ${clientId}] Traitement local - Somme: ${data.sum}, Moyenne: ${data.avg}`, 'client');
+                    addLog(`[Client ${clientId}] Envoi signal SIGUSR1 → Serveur (acquittement)`, 'signal');
+                    addLog(`[Serveur] Acquittement reçu de Client ${clientId}`, 'server');
+                    
+                    // Afficher le résultat dans la carte du client
+                    const resultDiv = document.getElementById(`result-${clientId}`);
+                    if (resultDiv) {
+                        resultDiv.innerHTML = `
+                            <div class="result-display">
+                                <div class="result-row">
+                                    <span style="color: #93deff;">Dernière réponse:</span>
+                                </div>
+                                <div class="values-display">${valuesStr}</div>
+                                <div class="result-row" style="margin-top: 8px;">
+                                    <span style="color: #93deff;">Somme:</span>
+                                    <span style="color: #4ecca3;">${data.sum}</span>
+                                </div>
+                                <div class="result-row">
+                                    <span style="color: #93deff;">Moyenne:</span>
+                                    <span style="color: #4ecca3;">${data.avg}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    // Remettre le client en idle
+                    client.status = 'idle';
+                    
+                    setTimeout(() => {
+                        document.getElementById('serverStatus').textContent = '● État: En attente';
+                        document.getElementById('serverStatus').className = 'status-badge status-waiting';
+                        document.getElementById('serverState').textContent = 'En attente';
+                        document.getElementById('fifo1Content').textContent = 'Tube vide - En attente de questions...';
+                        document.getElementById('fifo2Content').textContent = 'Tube vide - En attente de réponses...';
+                        renderClients();
+                    }, 2000);
+                } else {
+                    client.status = 'idle';
+                    renderClients();
+                    alert('Erreur: ' + data.error);
+                }
+            }, 500);
+        }
+
+        function clearLog() {
+            document.getElementById('logContent').innerHTML = `
+                <div style="text-align: center; color: #93deff; padding: 20px;">
+                    En attente d'événements...
+                </div>
+            `;
+            logCount = 0;
+            document.getElementById('logCount').textContent = '0';
+        }
+
+        // Initialiser l'interface
+        renderClients();
+        updateClientCount();
+    </script>
+</body>
+</html>
